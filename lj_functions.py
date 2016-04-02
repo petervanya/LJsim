@@ -20,28 +20,26 @@ class Sysparams(object):
         self.L = 10
 
 
-def V_LJ(mag_r, eps = 1, sigma = 1, rc = 3, *args):
+def V_LJ(mag_r, eps=1.0, sigma=1.0, rc=3.0, *args):
     '''Lennard-Jones potential, mag_r is a number.
     >>> from numpy.linalg import norm
     >>> V_LJ(norm([0.5, 0.5, 0.5]))
     12.99
     '''
     V_rc = 4 * eps * ((sigma / rc) ** 12 - (sigma / rc) ** 6)
-    if mag_r < rc:
-        return 4 * eps * ((sigma / mag_r) ** 12 - (sigma / mag_r) ** 6) - V_rc
+    return 4 * eps * ((sigma / mag_r) ** 12 - (sigma / mag_r) ** 6) - V_rc \
+           if mag_r < rc else 0.0
 
 
 def force(r, eps = 1, sigma = 1, rc = 3, *args):
     '''r is a vector'''
     mag_dr = norm(r)
-    if mag_dr < rc:
-        return 4 * eps * (-12 * (sigma / mag_dr) ** 12 + 6 * (sigma / mag_dr) ** 6) * r / mag_dr ** 2
-    return np.zeros(3)
+    return 4 * eps * (-12 * (sigma / mag_dr) ** 12 + 6 * (sigma / mag_dr) ** 6) * r / mag_dr **2 \
+           if mag_dr < rc else np.zeros(3)
 
 
 def tot_PE(pos_list, *sysparams):
-    n_fr = 0
-    E = 0
+    E = 0.0
     N = pos_list.shape[0]
     for i in range(N):
         for j in range(i + 1, N):
@@ -133,7 +131,7 @@ def integrate(pos_list, vel_list, dt, Nt, thermo, L, *sysparams):
         (pos_list, vel_list, Npasses) = vel_verlet_step(pos_list, vel_list, dt, L, *sysparams)
         E[i] = tot_KE(vel_list) + tot_PE(pos_list, *sysparams)
         if i % thermo == 0:
-            xyz_frames[(:, :, n_fr)] = pos_list
+            xyz_frames[:, :, n_fr] = pos_list
             print('Step: %i, Energy: %f' % (i, E[i]))
             n_fr += 1
             continue
