@@ -10,8 +10,6 @@ Questions:
 import numpy as np
 from numpy.linalg import norm
 
-sysparams = [1, 1, 3, 10]
-
 
 def V_LJ(mag_r, sp):
     '''Lennard-Jones potential, mag_r is a number.
@@ -69,7 +67,6 @@ def force_list(pos_list, sp):
     '''Force matrix'''
     N = pos_list.shape[0]
     force_mat = np.zeros((N, N, 3))
-    shift_vecs = sp.L * np.vstack((np.eye(3), -np.eye(3))) # FIX THIS!
     cell = sp.L*np.eye(3)
     inv_cell = np.linalg.pinv(cell)
     for i in range(N):
