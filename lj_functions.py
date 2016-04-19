@@ -1,30 +1,31 @@
 #!/usr/bin/env python3
-'''
+"""
 Forces modul for LJ clusters
 
 Questions:
 * how to best pass eps, sigma, rc, L to all the functions? Should use *args, or **kwargs?
 
 31/03/16
-'''
+"""
 import numpy as np
 from numpy.linalg import norm
+from lj_io import *
 
 
 def V_LJ(mag_r, sp):
-    '''Lennard-Jones potential, mag_r is a number.
+    """Lennard-Jones potential, mag_r is a number.
     * sp: system params
     >>> from numpy.linalg import norm
     >>> V_LJ(norm([0.5, 0.5, 0.5]))
     12.99
-    '''
+    """
     V_rc = 4 * sp.eps * ((sp.sigma / sp.rc) ** 12 - (sp.sigma / sp.rc) ** 6)
     return 4 * sp.eps * ((sp.sigma / mag_r) ** 12 - (sp.sigma / mag_r) ** 6) - \
     V_rc if mag_r < sp.rc else 0.0
 
 
 def force(r, sp):
-    '''r is a vector'''
+    """r is a vector"""
     mag_dr = norm(r)
     return 4 * sp.eps * (-12 * (sp.sigma / mag_dr) ** 12 + 6 * (sp.sigma / mag_dr) ** 6) * r / mag_dr **2 \
            if mag_dr < sp.rc else np.zeros(3)
@@ -41,9 +42,13 @@ def tot_PE(pos_list, sp):
 
 
 def tot_KE(vel_list):
-    '''Total kinetic energy of the system,
-    same mass assumed'''
+    """Total kinetic energy of the system,
+    same mass assumed"""
     return np.sum(vel_list * vel_list) / 2
+
+
+def temperature(vel_list):
+    return tot_KE(vel_list)/(3./2*len(vel_list))
 
 
 def init_pos(N, sp):
@@ -59,12 +64,12 @@ def init_pos(N, sp):
 
 
 def init_vel(N, T):
-    '''Initialise velocities'''
+    """Initialise velocities"""
     return np.random.randn(N, 3) * 3 * T
 
 
 def force_list(pos_list, sp):
-    '''Force matrix'''
+    """Force matrix"""
     N = pos_list.shape[0]
     force_mat = np.zeros((N, N, 3))
     cell = sp.L*np.eye(3)
@@ -82,8 +87,8 @@ def force_list(pos_list, sp):
 
 
 def verlet_step(pos_list2, pos_list1, sp):
-    '''Verlet algorithm, returing updated position list
-    and number of passes through walls'''
+    """Verlet algorithm, returing updated position list
+    and number of passes through walls"""
     F = force_list(pos_list2, sp)
     pos_list3 = (2 * pos_list2 - pos_list1) + F * sp.dt ** 2
     Npasses = np.sum(pos_list3 - pos_list3 % sp.L != 0, axis=1)
@@ -91,8 +96,8 @@ def verlet_step(pos_list2, pos_list1, sp):
 
 
 def vel_verlet_step(pos_list, vel_list, sp):
-    '''The velocity Verlet algorithm, 
-    returning position and velocity matrices'''
+    """The velocity Verlet algorithm, 
+    returning position and velocity matrices"""
     F = force_list(pos_list, sp)
     pos_list2 = pos_list + vel_list * sp.dt + F * sp.dt**2 / 2
     F2 = force_list(pos_list2, sp)
@@ -103,33 +108,37 @@ def vel_verlet_step(pos_list, vel_list, sp):
 
 
 def integrate(pos_list, vel_list, sp):
-    '''
+    """
     Verlet integration for Nt steps.
     Save each thermo-multiple step into xyz_frames.
-    Mass set to 1.
-    THINK ABOUT:
-    * should enable choosing between two Verlets?
-    '''
+    Mass set to 1.0.
+    """
     N = pos_list.shape[0]
     Nframes = int(sp.Nt // sp.thermo)
     n_fr = 1
     xyz_frames = np.zeros((N, 3, Nframes))
     E = np.zeros(sp.Nt)
+    T = np.zeros(sp.Nt)
 
     # 1st Verlet step
     F = force_list(pos_list, sp)
     pos_list = pos_list + vel_list * sp.dt + F * sp.dt**2 / 2
     E[0] = tot_KE(vel_list) + tot_PE(pos_list, sp)
+    T[0] = temperature(vel_list)
 
     # Other steps
     for i in range(1, sp.Nt):
-        (pos_list, vel_list, Npasses) = vel_verlet_step(pos_list, vel_list, sp)
+        pos_list, vel_list, Npasses = vel_verlet_step(pos_list, vel_list, sp)
         E[i] = tot_KE(vel_list) + tot_PE(pos_list, sp)
+        T[i] = temperature(vel_list)
         if i % sp.thermo == 0:
-            xyz_frames[:, :, n_fr] = pos_list
-            print('Step: %i, Energy: %f' % (i, E[i]))
+#            xyz_frames[:, :, n_fr] = pos_list
+            if sp.dump:
+                fname = "Dump/dump_" + str(i*sp.thermo) + ".xyz"
+                save_xyzmatrix(fname, pos_list)
+            print("Step: %i, Temperature: %f" % (i, T[i]))
             n_fr += 1
-            continue
-    return xyz_frames, E
+#    return xyz_frames, E
+    return E
 
 
