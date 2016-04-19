@@ -11,6 +11,7 @@ import numpy as np
 from numpy.linalg import norm
 from lj_io import save_xyzmatrix
 from numba import jit, float64
+from timing import timing
 
 
 def V_LJ(mag_r, sp):
@@ -81,10 +82,11 @@ def init_pos(N, sp):
     count = 0
     while E > E_cut:
         pos_list = np.random.rand(N, 3) * sp.L
-        if sp.use_numba:
-            E = tot_PE_numba(pos_list, sp.eps, sp.sigma, sp.rc)
-        else:
-            E = tot_PE(pos_list, sp)
+        with timing('tot_PE'):
+            if sp.use_numba:
+                E = tot_PE_numba(pos_list, sp.eps, sp.sigma, sp.rc)
+            else:
+                E = tot_PE(pos_list, sp)
         count += 1
     return pos_list, count, E
 
@@ -149,19 +151,21 @@ def integrate(pos_list, vel_list, sp):
     # 1st Verlet step
     F = force_list(pos_list, sp)
     pos_list = pos_list + vel_list * sp.dt + F * sp.dt**2 / 2
-    if sp.use_numba:
-        E[0] = tot_KE(vel_list) + tot_PE_numba(pos_list, sp.eps, sp.sigma, sp.rc)
-    else:
-        E[0] = tot_KE(vel_list) + tot_PE(pos_list, sp)
+    with timing('tot_PE'):
+        if sp.use_numba:
+            E[0] = tot_KE(vel_list) + tot_PE_numba(pos_list, sp.eps, sp.sigma, sp.rc)
+        else:
+            E[0] = tot_KE(vel_list) + tot_PE(pos_list, sp)
     T[0] = temperature(vel_list)
 
     # Other steps
     for i in range(1, sp.Nt):
         pos_list, vel_list, Npasses = vel_verlet_step(pos_list, vel_list, sp)
-        if sp.use_numba:
-            E[i] = tot_KE(vel_list) + tot_PE_numba(pos_list, sp.eps, sp.sigma, sp.rc)
-        else:
-            E[i] = tot_KE(vel_list) + tot_PE(pos_list, sp)
+        with timing('tot_PE'):
+            if sp.use_numba:
+                E[i] = tot_KE(vel_list) + tot_PE_numba(pos_list, sp.eps, sp.sigma, sp.rc)
+            else:
+                E[i] = tot_KE(vel_list) + tot_PE(pos_list, sp)
         T[i] = temperature(vel_list)
         if i % sp.thermo == 0:
             # xyz_frames[:, :, n_fr] = pos_list

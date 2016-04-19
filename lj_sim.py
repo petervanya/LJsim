@@ -18,6 +18,7 @@ import os
 import sys
 from docopt import docopt
 from lj_functions import init_pos, init_vel, integrate
+from timing import print_timing
 
 
 class mydict(dict):
@@ -77,3 +78,4 @@ if __name__ == "__main__":
 #        for i in range(Nf):
 #            fname = "Dump/dump_" + str((i+1)*thermo) + ".xyz"
 #            save_xyzmatrix(fname, xyz_frames[:, :, i])
+    print_timing()
