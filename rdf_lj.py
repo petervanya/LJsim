@@ -14,6 +14,7 @@ Options:
 import numpy as np
 import glob
 from docopt import docopt
+from lj_io import *
 
 
 def dmatrix_numpy(xyz):
@@ -30,8 +31,8 @@ def dist_vec_naive(xyz, L):
     for i in range(N):
         for j in range(i):
             dr = xyz[i] - xyz[j]
-            G = np.dot(inv_cell, dr)   # coords of dr in basis of the cell, range [-1, 1]
-            G_n = G - np.round(G)      # clever bit
+            G = np.dot(inv_cell, dr)
+            G_n = G - np.round(G)
             dr_n = np.dot(cell, G_n)
             dist_vec[cnt] = np.linalg.norm(dr_n)
             cnt += 1
@@ -52,12 +53,13 @@ if __name__ == "__main__":
     rdf[:, 0] = r
 
     for infile in infiles:
-        A = np.loadtxt(infile)
+#        A = np.loadtxt(infile)
+        A = read_xyzmatrix(infile)[:, 1:]
         dist_vec = dist_vec_naive(A, L)
         h, _ = np.histogram(dist_vec, bins=bins)
         rdf[:, 1] += h
     
-    rdf[:, 1] *= 1./float(len(infiles)) * L**3/len(dist_vec) / (4*np.pi*r**2)
+    rdf[:, 1] *= 1./float(len(infiles)) * L**3/len(dist_vec) /(4*np.pi*r**2 * dr)
     np.savetxt("rdf.out", rdf)
     print("rdf saved into rdf.out")
 
