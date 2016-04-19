@@ -17,6 +17,7 @@ import numpy as np
 import os, sys
 from docopt import docopt
 from lj_functions import *
+from lj_io import *
 
 
 class mydict(dict):
@@ -46,34 +47,37 @@ if __name__ == "__main__":
         sys.exit()
     
     sp = mydict(eps=eps, sigma=sigma, rc=rc, N=N, L=L, dt=dt, Nt=Nt, \
-                thermo=thermo, seed=seed) # system params
+                thermo=thermo, seed=seed, dump=args["--dump"]) # system params
 
     print(" =========== \n LJ clusters \n ===========")
     print("Particles: %i | Temp: %f | Steps: %i | dt: %f | thermo: %i" \
           % (N, T, Nt, dt, thermo))
 
 
-    # init system
-    print("Initialising the system...")
-    pos_list, count, E = init_pos(N, sp)
-    vel_list = init_vel(N, T)
-
-    # run system
-    print("Starting integration...")
-    xyz_frames, E = integrate(pos_list, vel_list, sp)
-
-    # print into file
-    Nf = xyz_frames.shape[-1]
-
     if args["--dump"]:
-        print("Dumping xyz files...")
         dumpdir = "Dump"
         if not os.path.exists(dumpdir):
             os.makedirs(dumpdir)
  
-        for i in range(Nf):
-            fname = "Dump/dump_" + str((i+1)*thermo) + ".out"
-            np.savetxt(fname, xyz_frames[:, :, i])
+
+    # init system
+    print("Initialising the system...")
+    pos_list, count, E = init_pos(N, sp)
+    print("Number of trials: %i", count)
+    vel_list = init_vel(N, T)
+
+    # How to equilibrate?
+
+    # run system
+    print("Starting integration...")
+#    xyz_frames, E = integrate(pos_list, vel_list, sp)
+    E = integrate(pos_list, vel_list, sp)
+
+    # print into file
+#    Nf = xyz_frames.shape[-1]
+#        for i in range(Nf):
+#            fname = "Dump/dump_" + str((i+1)*thermo) + ".xyz"
+#            save_xyzmatrix(fname, xyz_frames[:, :, i])
 
     
 
