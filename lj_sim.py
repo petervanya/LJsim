@@ -18,7 +18,7 @@ import os
 import sys
 from docopt import docopt
 from lj_functions import init_pos, init_vel, integrate
-from timing import print_timing
+from timing import print_timing, timing
 
 
 class mydict(dict):
@@ -62,16 +62,18 @@ if __name__ == "__main__":
 
     # init system
     print("Initialising the system...")
-    pos_list, count, E = init_pos(N, sp)
+    with timing('init'):
+        pos_list, count, E = init_pos(N, sp)
+        vel_list = init_vel(N, T)
     print("Number of trials: %i", count)
-    vel_list = init_vel(N, T)
 
     # How to equilibrate?
 
     # run system
     print("Starting integration...")
 #    xyz_frames, E = integrate(pos_list, vel_list, sp)
-    E = integrate(pos_list, vel_list, sp)
+    with timing('integrate'):
+        E = integrate(pos_list, vel_list, sp)
 
     # print into file
 #    Nf = xyz_frames.shape[-1]
