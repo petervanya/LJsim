@@ -3,13 +3,14 @@
 Simulation of LJ clusters in a box w pbc
 
 Usage: lj_sim.py <L> <rho> [--T <T>] [--Nt <Nt>] [--dt <dt>]
-                 [--thermo <th>] [--dump]
+                 [--thermo <th>] [--dump] [--numba]
 
 Options:
     --T <T>             Temperature [default: 1.0]
     --Nt <Nt>           Number of time steps [default: 100]
     --dt <dt>           Timestep [default: 0.002]
     --thermo <th>       Print output this many times [default: 10]
+    --numba             Use Numba versions of functions
 
 02/04/16
 """
@@ -46,7 +47,8 @@ if __name__ == "__main__":
         sys.exit()
 
     sp = mydict(eps=eps, sigma=sigma, rc=rc, N=N, L=L, dt=dt, Nt=Nt,
-                thermo=thermo, seed=seed, dump=args["--dump"])  # system params
+                thermo=thermo, seed=seed, dump=args["--dump"],
+                use_numba=args["--numba"])  # system params
 
     print(" =========== \n LJ clusters \n ===========")
     print("Particles: %i | Temp: %f | Steps: %i | dt: %f | thermo: %i"

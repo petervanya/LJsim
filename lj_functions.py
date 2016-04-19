@@ -10,6 +10,7 @@ Questions:
 import numpy as np
 from numpy.linalg import norm
 from lj_io import save_xyzmatrix
+from numba import jit, float64
 
 
 def V_LJ(mag_r, sp):
@@ -22,6 +23,13 @@ def V_LJ(mag_r, sp):
     V_rc = 4 * sp.eps * ((sp.sigma / sp.rc) ** 12 - (sp.sigma / sp.rc) ** 6)
     return 4 * sp.eps * ((sp.sigma / mag_r) ** 12 - (sp.sigma / mag_r) ** 6) - \
         V_rc if mag_r < sp.rc else 0.0
+
+
+@jit(float64(float64, float64, float64, float64), nopython=True)
+def V_LJ_numba(mag_r, eps, sigma, rc):
+    V_rc = 4 * eps * ((sigma / rc) ** 12 - (sigma / rc) ** 6)
+    return 4 * eps * ((sigma / mag_r) ** 12 - (sigma / mag_r) ** 6) - \
+        V_rc if mag_r < rc else 0.0
 
 
 def force(r, sp):
@@ -38,6 +46,21 @@ def tot_PE(pos_list, sp):
     for i in range(N):
         for j in range(i + 1, N):
             E += V_LJ(norm(pos_list[i] - pos_list[j]), sp)
+    return E
+
+
+@jit(float64(float64[:]))
+def norm_numba(r):
+    return np.sqrt(np.sum(r**2))
+
+
+@jit(float64(float64[:, :], float64, float64, float64), nopython=True)
+def tot_PE_numba(pos_list, eps, sigma, rc):
+    E = 0.0
+    N = pos_list.shape[0]
+    for i in range(N):
+        for j in range(i + 1, N):
+            E += V_LJ_numba(norm_numba(pos_list[i] - pos_list[j]), eps, sigma, rc)
     return E
 
 
@@ -58,7 +81,10 @@ def init_pos(N, sp):
     count = 0
     while E > E_cut:
         pos_list = np.random.rand(N, 3) * sp.L
-        E = tot_PE(pos_list, sp)
+        if sp.use_numba:
+            E = tot_PE_numba(pos_list, sp.eps, sp.sigma, sp.rc)
+        else:
+            E = tot_PE(pos_list, sp)
         count += 1
     return pos_list, count, E
 
@@ -123,13 +149,19 @@ def integrate(pos_list, vel_list, sp):
     # 1st Verlet step
     F = force_list(pos_list, sp)
     pos_list = pos_list + vel_list * sp.dt + F * sp.dt**2 / 2
-    E[0] = tot_KE(vel_list) + tot_PE(pos_list, sp)
+    if sp.use_numba:
+        E[0] = tot_KE(vel_list) + tot_PE_numba(pos_list, sp.eps, sp.sigma, sp.rc)
+    else:
+        E[0] = tot_KE(vel_list) + tot_PE(pos_list, sp)
     T[0] = temperature(vel_list)
 
     # Other steps
     for i in range(1, sp.Nt):
         pos_list, vel_list, Npasses = vel_verlet_step(pos_list, vel_list, sp)
-        E[i] = tot_KE(vel_list) + tot_PE(pos_list, sp)
+        if sp.use_numba:
+            E[i] = tot_KE(vel_list) + tot_PE_numba(pos_list, sp.eps, sp.sigma, sp.rc)
+        else:
+            E[i] = tot_KE(vel_list) + tot_PE(pos_list, sp)
         T[i] = temperature(vel_list)
         if i % sp.thermo == 0:
             # xyz_frames[:, :, n_fr] = pos_list
