@@ -9,7 +9,9 @@ Questions:
 """
 import numpy as np
 from numpy.linalg import norm
-from lj_io import *
+from lj_io import save_xyzmatrix
+from numba import jit, float64
+from timing import timing
 
 
 def V_LJ(mag_r, sp):
@@ -21,14 +23,21 @@ def V_LJ(mag_r, sp):
     """
     V_rc = 4 * sp.eps * ((sp.sigma / sp.rc) ** 12 - (sp.sigma / sp.rc) ** 6)
     return 4 * sp.eps * ((sp.sigma / mag_r) ** 12 - (sp.sigma / mag_r) ** 6) - \
-    V_rc if mag_r < sp.rc else 0.0
+        V_rc if mag_r < sp.rc else 0.0
+
+
+@jit(float64(float64, float64, float64, float64), nopython=True)
+def V_LJ_numba(mag_r, eps, sigma, rc):
+    V_rc = 4 * eps * ((sigma / rc) ** 12 - (sigma / rc) ** 6)
+    return 4 * eps * ((sigma / mag_r) ** 12 - (sigma / mag_r) ** 6) - \
+        V_rc if mag_r < rc else 0.0
 
 
 def force(r, sp):
     """r is a vector"""
     mag_dr = norm(r)
-    return 4 * sp.eps * (-12 * (sp.sigma / mag_dr) ** 12 + 6 * (sp.sigma / mag_dr) ** 6) * r / mag_dr **2 \
-           if mag_dr < sp.rc else np.zeros(3)
+    return 4 * sp.eps * (-12 * (sp.sigma / mag_dr) ** 12 + 6 * (sp.sigma / mag_dr) ** 6) * r / mag_dr**2 \
+        if mag_dr < sp.rc else np.zeros(3)
 
 
 def tot_PE(pos_list, sp):
@@ -38,6 +47,21 @@ def tot_PE(pos_list, sp):
     for i in range(N):
         for j in range(i + 1, N):
             E += V_LJ(norm(pos_list[i] - pos_list[j]), sp)
+    return E
+
+
+@jit(float64(float64[:]))
+def norm_numba(r):
+    return np.sqrt(np.sum(r**2))
+
+
+@jit(float64(float64[:, :], float64, float64, float64), nopython=True)
+def tot_PE_numba(pos_list, eps, sigma, rc):
+    E = 0.0
+    N = pos_list.shape[0]
+    for i in range(N):
+        for j in range(i + 1, N):
+            E += V_LJ_numba(norm_numba(pos_list[i] - pos_list[j]), eps, sigma, rc)
     return E
 
 
@@ -58,7 +82,11 @@ def init_pos(N, sp):
     count = 0
     while E > E_cut:
         pos_list = np.random.rand(N, 3) * sp.L
-        E = tot_PE(pos_list, sp)
+        with timing('tot_PE'):
+            if sp.use_numba:
+                E = tot_PE_numba(pos_list, sp.eps, sp.sigma, sp.rc)
+            else:
+                E = tot_PE(pos_list, sp)
         count += 1
     return pos_list, count, E
 
@@ -81,7 +109,7 @@ def force_list(pos_list, sp):
             G_n = G - np.round(G)
             dr_n = np.dot(cell, G_n)
             force_mat[i, j] = force(dr_n, sp)
-    
+
     force_mat -= np.transpose(force_mat, (1, 0, 2))
     return np.sum(force_mat, axis=1)
 
@@ -96,7 +124,7 @@ def verlet_step(pos_list2, pos_list1, sp):
 
 
 def vel_verlet_step(pos_list, vel_list, sp):
-    """The velocity Verlet algorithm, 
+    """The velocity Verlet algorithm,
     returning position and velocity matrices"""
     F = force_list(pos_list, sp)
     pos_list2 = pos_list + vel_list * sp.dt + F * sp.dt**2 / 2
@@ -113,32 +141,38 @@ def integrate(pos_list, vel_list, sp):
     Save each thermo-multiple step into xyz_frames.
     Mass set to 1.0.
     """
-    N = pos_list.shape[0]
-    Nframes = int(sp.Nt // sp.thermo)
+    # N = pos_list.shape[0]
+    # Nframes = int(sp.Nt // sp.thermo)
     n_fr = 1
-    xyz_frames = np.zeros((N, 3, Nframes))
+    # xyz_frames = np.zeros((N, 3, Nframes))
     E = np.zeros(sp.Nt)
     T = np.zeros(sp.Nt)
 
     # 1st Verlet step
     F = force_list(pos_list, sp)
     pos_list = pos_list + vel_list * sp.dt + F * sp.dt**2 / 2
-    E[0] = tot_KE(vel_list) + tot_PE(pos_list, sp)
+    with timing('tot_PE'):
+        if sp.use_numba:
+            E[0] = tot_KE(vel_list) + tot_PE_numba(pos_list, sp.eps, sp.sigma, sp.rc)
+        else:
+            E[0] = tot_KE(vel_list) + tot_PE(pos_list, sp)
     T[0] = temperature(vel_list)
 
     # Other steps
     for i in range(1, sp.Nt):
         pos_list, vel_list, Npasses = vel_verlet_step(pos_list, vel_list, sp)
-        E[i] = tot_KE(vel_list) + tot_PE(pos_list, sp)
+        with timing('tot_PE'):
+            if sp.use_numba:
+                E[i] = tot_KE(vel_list) + tot_PE_numba(pos_list, sp.eps, sp.sigma, sp.rc)
+            else:
+                E[i] = tot_KE(vel_list) + tot_PE(pos_list, sp)
         T[i] = temperature(vel_list)
         if i % sp.thermo == 0:
-#            xyz_frames[:, :, n_fr] = pos_list
+            # xyz_frames[:, :, n_fr] = pos_list
             if sp.dump:
                 fname = "Dump/dump_" + str(i*sp.thermo) + ".xyz"
                 save_xyzmatrix(fname, pos_list)
             print("Step: %i, Temperature: %f" % (i, T[i]))
             n_fr += 1
-#    return xyz_frames, E
+    # return xyz_frames, E
     return E
-
-
