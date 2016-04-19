@@ -9,7 +9,7 @@ Questions:
 """
 import numpy as np
 from numpy.linalg import norm
-from lj_io import *
+from lj_io import save_xyzmatrix
 
 
 def V_LJ(mag_r, sp):
@@ -21,14 +21,14 @@ def V_LJ(mag_r, sp):
     """
     V_rc = 4 * sp.eps * ((sp.sigma / sp.rc) ** 12 - (sp.sigma / sp.rc) ** 6)
     return 4 * sp.eps * ((sp.sigma / mag_r) ** 12 - (sp.sigma / mag_r) ** 6) - \
-    V_rc if mag_r < sp.rc else 0.0
+        V_rc if mag_r < sp.rc else 0.0
 
 
 def force(r, sp):
     """r is a vector"""
     mag_dr = norm(r)
-    return 4 * sp.eps * (-12 * (sp.sigma / mag_dr) ** 12 + 6 * (sp.sigma / mag_dr) ** 6) * r / mag_dr **2 \
-           if mag_dr < sp.rc else np.zeros(3)
+    return 4 * sp.eps * (-12 * (sp.sigma / mag_dr) ** 12 + 6 * (sp.sigma / mag_dr) ** 6) * r / mag_dr**2 \
+        if mag_dr < sp.rc else np.zeros(3)
 
 
 def tot_PE(pos_list, sp):
@@ -81,7 +81,7 @@ def force_list(pos_list, sp):
             G_n = G - np.round(G)
             dr_n = np.dot(cell, G_n)
             force_mat[i, j] = force(dr_n, sp)
-    
+
     force_mat -= np.transpose(force_mat, (1, 0, 2))
     return np.sum(force_mat, axis=1)
 
@@ -96,7 +96,7 @@ def verlet_step(pos_list2, pos_list1, sp):
 
 
 def vel_verlet_step(pos_list, vel_list, sp):
-    """The velocity Verlet algorithm, 
+    """The velocity Verlet algorithm,
     returning position and velocity matrices"""
     F = force_list(pos_list, sp)
     pos_list2 = pos_list + vel_list * sp.dt + F * sp.dt**2 / 2
@@ -113,10 +113,10 @@ def integrate(pos_list, vel_list, sp):
     Save each thermo-multiple step into xyz_frames.
     Mass set to 1.0.
     """
-    N = pos_list.shape[0]
-    Nframes = int(sp.Nt // sp.thermo)
+    # N = pos_list.shape[0]
+    # Nframes = int(sp.Nt // sp.thermo)
     n_fr = 1
-    xyz_frames = np.zeros((N, 3, Nframes))
+    # xyz_frames = np.zeros((N, 3, Nframes))
     E = np.zeros(sp.Nt)
     T = np.zeros(sp.Nt)
 
@@ -132,13 +132,11 @@ def integrate(pos_list, vel_list, sp):
         E[i] = tot_KE(vel_list) + tot_PE(pos_list, sp)
         T[i] = temperature(vel_list)
         if i % sp.thermo == 0:
-#            xyz_frames[:, :, n_fr] = pos_list
+            # xyz_frames[:, :, n_fr] = pos_list
             if sp.dump:
                 fname = "Dump/dump_" + str(i*sp.thermo) + ".xyz"
                 save_xyzmatrix(fname, pos_list)
             print("Step: %i, Temperature: %f" % (i, T[i]))
             n_fr += 1
-#    return xyz_frames, E
+    # return xyz_frames, E
     return E
-
-
