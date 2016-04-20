@@ -3,7 +3,10 @@ blddir = build
 FFLAGS ?= -O3
 F2PY ?= f2py
 
-all: lj_functions_c lj_functions_f
+all: lj_functions_c lj_functions_f ljcf.so
+
+ljcf.so: ljcf.f90
+	${FC} -shared -fPIC ${FFLAGS} -o $@ $^
 
 lj_functions_c:
 	python3 setup.py build_ext --inplace
