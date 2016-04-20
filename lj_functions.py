@@ -12,6 +12,7 @@ from numpy.linalg import norm
 from lj_io import save_xyzmatrix
 from numba import jit, float64
 from timing import timing
+import lj_functions_c as ljc
 
 
 def V_LJ(mag_r, sp):
@@ -92,6 +93,8 @@ def init_pos(N, sp):
         with timing('tot_PE'):
             if sp.use_numba:
                 E = tot_PE_numba(pos_list, sp.eps, sp.sigma, sp.rc)
+            elif sp.use_cython:
+                E = ljc.tot_PE(pos_list, sp)
             else:
                 E = tot_PE(pos_list, sp)
         count += 1
@@ -161,12 +164,16 @@ def vel_verlet_step(pos_list, vel_list, sp):
     with timing('force_list'):
         if sp.use_numba:
             F = force_list_numba(pos_list, sp.L, sp.eps, sp.sigma, sp.rc)
+        elif sp.use_cython:
+            F = ljc.force_list(pos_list, sp)
         else:
             F = force_list(pos_list, sp)
     pos_list2 = pos_list + vel_list * sp.dt + F * sp.dt**2 / 2
     with timing('force_list'):
         if sp.use_numba:
             F2 = force_list_numba(pos_list2, sp.L, sp.eps, sp.sigma, sp.rc)
+        elif sp.use_cython:
+            F2 = ljc.force_list(pos_list2, sp)
         else:
             F2 = force_list(pos_list2, sp)
     vel_list2 = vel_list + (F + F2) * sp.dt / 2
@@ -192,12 +199,16 @@ def integrate(pos_list, vel_list, sp):
     with timing('force_list'):
         if sp.use_numba:
             F = force_list_numba(pos_list, sp.L, sp.eps, sp.sigma, sp.rc)
+        elif sp.use_cython:
+            F = ljc.force_list(pos_list, sp)
         else:
             F = force_list(pos_list, sp)
     pos_list = pos_list + vel_list * sp.dt + F * sp.dt**2 / 2
     with timing('tot_PE'):
         if sp.use_numba:
             E[0] = tot_KE(vel_list) + tot_PE_numba(pos_list, sp.eps, sp.sigma, sp.rc)
+        elif sp.use_cython:
+            E[0] = tot_KE(vel_list) + ljc.tot_PE(pos_list, sp)
         else:
             E[0] = tot_KE(vel_list) + tot_PE(pos_list, sp)
     T[0] = temperature(vel_list)
@@ -208,6 +219,8 @@ def integrate(pos_list, vel_list, sp):
         with timing('tot_PE'):
             if sp.use_numba:
                 E[i] = tot_KE(vel_list) + tot_PE_numba(pos_list, sp.eps, sp.sigma, sp.rc)
+            elif sp.use_cython:
+                E[i] = tot_KE(vel_list) + ljc.tot_PE(pos_list, sp)
             else:
                 E[i] = tot_KE(vel_list) + tot_PE(pos_list, sp)
         T[i] = temperature(vel_list)
