@@ -40,6 +40,18 @@ def force(r, sp):
         if mag_dr < sp.rc else np.zeros(3)
 
 
+@jit(float64(float64[:]), nopython=True)
+def norm_numba(r):
+    return np.sqrt(np.sum(r**2))
+
+
+@jit(float64[:](float64[:], float64, float64, float64), nopython=True)
+def force_numba(r, eps, sigma, rc):
+    mag_dr = norm_numba(r)
+    return 4 * eps * (-12 * (sigma / mag_dr) ** 12 + 6 * (sigma / mag_dr) ** 6) * r / mag_dr**2 \
+        if mag_dr < rc else np.zeros(3)
+
+
 def tot_PE(pos_list, sp):
     """ MAKE THIS MORE EFFICIENT """
     E = 0.0
@@ -48,11 +60,6 @@ def tot_PE(pos_list, sp):
         for j in range(i + 1, N):
             E += V_LJ(norm(pos_list[i] - pos_list[j]), sp)
     return E
-
-
-@jit(float64(float64[:]))
-def norm_numba(r):
-    return np.sqrt(np.sum(r**2))
 
 
 @jit(float64(float64[:, :], float64, float64, float64), nopython=True)
@@ -114,6 +121,31 @@ def force_list(pos_list, sp):
     return np.sum(force_mat, axis=1)
 
 
+@jit(float64[:, :, :](float64[:, :], float64, float64, float64, float64), nopython=True)
+def force_list_numba_inner(pos_list, L, eps, sigma, rc):
+    N = pos_list.shape[0]
+    force_mat = np.zeros((N, N, 3))
+    cell = L*np.eye(3)
+    inv_cell = np.linalg.inv(cell)
+    for i in range(N):
+        for j in range(i):
+            dr = pos_list[j] - pos_list[i]
+            G = np.dot(inv_cell, dr)
+            G_rounded = np.zeros(3)
+            for k in range(3):
+                G_rounded[k] = round(G[k])
+            G_n = G - G_rounded
+            dr_n = np.dot(cell, G_n)
+            force_mat[i, j] = force_numba(dr_n, eps, sigma, rc)
+    return force_mat
+
+
+def force_list_numba(pos_list, L, eps, sigma, rc):
+    force_mat = force_list_numba_inner(pos_list, L, eps, sigma, rc)
+    force_mat -= np.transpose(force_mat, (1, 0, 2))
+    return np.sum(force_mat, axis=1)
+
+
 def verlet_step(pos_list2, pos_list1, sp):
     """Verlet algorithm, returing updated position list
     and number of passes through walls"""
@@ -126,9 +158,17 @@ def verlet_step(pos_list2, pos_list1, sp):
 def vel_verlet_step(pos_list, vel_list, sp):
     """The velocity Verlet algorithm,
     returning position and velocity matrices"""
-    F = force_list(pos_list, sp)
+    with timing('force_list'):
+        if sp.use_numba:
+            F = force_list_numba(pos_list, sp.L, sp.eps, sp.sigma, sp.rc)
+        else:
+            F = force_list(pos_list, sp)
     pos_list2 = pos_list + vel_list * sp.dt + F * sp.dt**2 / 2
-    F2 = force_list(pos_list2, sp)
+    with timing('force_list'):
+        if sp.use_numba:
+            F2 = force_list_numba(pos_list2, sp.L, sp.eps, sp.sigma, sp.rc)
+        else:
+            F2 = force_list(pos_list2, sp)
     vel_list2 = vel_list + (F + F2) * sp.dt / 2
     Npasses = np.sum(pos_list2 - pos_list2 % sp.L != 0, axis=1)
     pos_list2 = pos_list2 % sp.L
@@ -149,7 +189,11 @@ def integrate(pos_list, vel_list, sp):
     T = np.zeros(sp.Nt)
 
     # 1st Verlet step
-    F = force_list(pos_list, sp)
+    with timing('force_list'):
+        if sp.use_numba:
+            F = force_list_numba(pos_list, sp.L, sp.eps, sp.sigma, sp.rc)
+        else:
+            F = force_list(pos_list, sp)
     pos_list = pos_list + vel_list * sp.dt + F * sp.dt**2 / 2
     with timing('tot_PE'):
         if sp.use_numba:
