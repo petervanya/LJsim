@@ -14,6 +14,7 @@ from numba import jit, float64
 from timing import timing
 import lj_functions_c as ljc
 from lj_functions_f import ljf
+import lj_functions_cf as ljcf
 
 
 def V_LJ(mag_r, sp):
@@ -108,6 +109,8 @@ def init_pos(N, sp):
                 E = ljc.tot_PE(pos_list, sp)
             elif sp.use_fortran:
                 E = ljf.tot_pe(pos_list, sp.eps, sp.sigma, sp.rc)
+            elif sp.use_cfortran:
+                E = ljcf.tot_PE(pos_list, sp)
             else:
                 E = tot_PE(pos_list, sp)
         count += 1
@@ -193,6 +196,8 @@ def vel_verlet_step(pos_list, vel_list, sp):
             F = ljc.force_list(pos_list, sp)
         elif sp.use_fortran:
             F = ljf.force_list(pos_list, sp.L, sp.eps, sp.sigma, sp.rc, np.linalg.inv)
+        elif sp.use_cfortran:
+            F = ljcf.force_list(pos_list, sp)
         else:
             F = force_list(pos_list, sp)
     pos_list2 = pos_list + vel_list * sp.dt + F * sp.dt**2 / 2
@@ -203,6 +208,8 @@ def vel_verlet_step(pos_list, vel_list, sp):
             F2 = ljc.force_list(pos_list2, sp)
         elif sp.use_fortran:
             F2 = ljf.force_list(pos_list2, sp.L, sp.eps, sp.sigma, sp.rc, np.linalg.inv)
+        elif sp.use_cfortran:
+            F2 = ljcf.force_list(pos_list2, sp)
         else:
             F2 = force_list(pos_list2, sp)
     vel_list2 = vel_list + (F + F2) * sp.dt / 2
@@ -232,6 +239,8 @@ def integrate(pos_list, vel_list, sp):
             F = ljc.force_list(pos_list, sp)
         elif sp.use_fortran:
             F = ljf.force_list(pos_list, sp.L, sp.eps, sp.sigma, sp.rc, np.linalg.inv)
+        elif sp.use_cfortran:
+            F = ljcf.force_list(pos_list, sp)
         else:
             F = force_list(pos_list, sp)
     pos_list = pos_list + vel_list * sp.dt + F * sp.dt**2 / 2
@@ -242,6 +251,8 @@ def integrate(pos_list, vel_list, sp):
             E[0] = tot_KE(vel_list) + ljc.tot_PE(pos_list, sp)
         elif sp.use_fortran:
             E[0] = tot_KE(vel_list) + ljf.tot_pe(pos_list, sp.eps, sp.sigma, sp.rc)
+        elif sp.use_cfortran:
+            E[0] = tot_KE(vel_list) + ljcf.tot_PE(pos_list, sp)
         else:
             E[0] = tot_KE(vel_list) + tot_PE(pos_list, sp)
     T[0] = temperature(vel_list)
@@ -256,6 +267,8 @@ def integrate(pos_list, vel_list, sp):
                 E[i] = tot_KE(vel_list) + ljc.tot_PE(pos_list, sp)
             elif sp.use_fortran:
                 E[i] = tot_KE(vel_list) + ljf.tot_pe(pos_list, sp.eps, sp.sigma, sp.rc)
+            elif sp.use_cfortran:
+                E[i] = tot_KE(vel_list) + ljcf.tot_PE(pos_list, sp)
             else:
                 E[i] = tot_KE(vel_list) + tot_PE(pos_list, sp)
         T[i] = temperature(vel_list)
