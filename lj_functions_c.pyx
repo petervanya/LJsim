@@ -17,6 +17,7 @@ cdef struct Sp:
     bint dump
     bint use_numba
     bint use_cython
+    bint use_fortran
 
 
 @cython.boundscheck(False)

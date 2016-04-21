@@ -3,7 +3,7 @@
 Simulation of LJ clusters in a box w pbc
 
 Usage: lj_sim.py <L> <rho> [--T <T>] [--Nt <Nt>] [--dt <dt>]
-                 [--thermo <th>] [--dump] [--numba | --cython]
+                 [--thermo <th>] [--dump] [--numba | --cython | --fortran]
 
 Options:
     --T <T>             Temperature [default: 1.0]
@@ -11,7 +11,8 @@ Options:
     --dt <dt>           Timestep [default: 0.002]
     --thermo <th>       Print output this many times [default: 10]
     --numba             Use Numba versions of functions
-    --cython            Use Cyton versions of functions
+    --cython            Use Cython versions of functions
+    --fortran           Use Fortran versions of functions
 
 02/04/16
 """
@@ -50,7 +51,8 @@ if __name__ == "__main__":
 
     sp = mydict(eps=eps, sigma=sigma, rc=rc, N=N, L=L, dt=dt, Nt=Nt,
                 thermo=thermo, seed=seed, dump=args["--dump"],
-                use_numba=args["--numba"], use_cython=args['--cython'])  # system params
+                use_numba=args["--numba"], use_cython=args['--cython'],
+                use_fortran=args['--fortran'])  # system params
 
     print(" =========== \n LJ clusters \n ===========")
     print("Particles: %i | Temp: %f | Steps: %i | dt: %f | thermo: %i"
