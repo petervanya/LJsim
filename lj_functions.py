@@ -44,14 +44,21 @@ def force(r, sp):
 
 @jit(float64(float64[:]), nopython=True)
 def norm_numba(r):
-    return np.sqrt(np.sum(r**2))
+    sqsum = 0.
+    for x in r:
+        sqsum += x**2
+    return np.sqrt(sqsum)
 
 
 @jit(float64[:](float64[:], float64, float64, float64), nopython=True)
 def force_numba(r, eps, sigma, rc):
     mag_dr = norm_numba(r)
-    return 4 * eps * (-12 * (sigma / mag_dr) ** 12 + 6 * (sigma / mag_dr) ** 6) * r / mag_dr**2 \
-        if mag_dr < rc else np.zeros(3)
+    force = np.zeros(3)
+    if mag_dr < rc:
+        for i in range(3):
+            force[i] = 4 * eps * (-12 * (sigma / mag_dr) ** 12 + 6 * (sigma / mag_dr) ** 6) \
+                * r[i] / mag_dr**2
+    return force
 
 
 def tot_PE(pos_list, sp):
@@ -68,9 +75,12 @@ def tot_PE(pos_list, sp):
 def tot_PE_numba(pos_list, eps, sigma, rc):
     E = 0.0
     N = pos_list.shape[0]
+    dr = np.zeros(3)
     for i in range(N):
         for j in range(i + 1, N):
-            E += V_LJ_numba(norm_numba(pos_list[i] - pos_list[j]), eps, sigma, rc)
+            for k in range(3):
+                dr[k] = pos_list[i, k] - pos_list[j, k]
+            E += V_LJ_numba(norm_numba(dr), eps, sigma, rc)
     return E
 
 
@@ -133,15 +143,27 @@ def force_list_numba_inner(pos_list, L, eps, sigma, rc):
     force_mat = np.zeros((N, N, 3))
     cell = L*np.eye(3)
     inv_cell = np.linalg.inv(cell)
+    dr = np.zeros(3)
+    G = np.zeros(3)
+    G_rounded = np.zeros(3)
+    G_n = np.zeros(3)
+    dr_n = np.zeros(3)
     for i in range(N):
         for j in range(i):
-            dr = pos_list[j] - pos_list[i]
-            G = np.dot(inv_cell, dr)
-            G_rounded = np.zeros(3)
+            for k in range(3):
+                dr[k] = pos_list[j, k] - pos_list[i, k]
+            for k in range(3):
+                G[k] = 0.
+                for l in range(3):
+                    G[k] += inv_cell[k, l]*dr[l]
             for k in range(3):
                 G_rounded[k] = round(G[k])
-            G_n = G - G_rounded
-            dr_n = np.dot(cell, G_n)
+            for k in range(3):
+                G_n[k] = G[k] - G_rounded[k]
+            for k in range(3):
+                dr_n[k] = 0.
+                for l in range(3):
+                    dr_n[k] += cell[k, l]*G_n[l]
             force_mat[i, j] = force_numba(dr_n, eps, sigma, rc)
     return force_mat
 
@@ -152,13 +174,13 @@ def force_list_numba(pos_list, L, eps, sigma, rc):
     return np.sum(force_mat, axis=1)
 
 
-def verlet_step(pos_list2, pos_list1, sp):
-    """Verlet algorithm, returing updated position list
-    and number of passes through walls"""
-    F = force_list(pos_list2, sp)
-    pos_list3 = (2 * pos_list2 - pos_list1) + F * sp.dt ** 2
-    Npasses = np.sum(pos_list3 - pos_list3 % sp.L != 0, axis=1)
-    return new_list % sp.L, Npasses
+# def verlet_step(pos_list2, pos_list1, sp):
+#     """Verlet algorithm, returing updated position list
+#     and number of passes through walls"""
+#     F = force_list(pos_list2, sp)
+#     pos_list3 = (2 * pos_list2 - pos_list1) + F * sp.dt ** 2
+#     Npasses = np.sum(pos_list3 - pos_list3 % sp.L != 0, axis=1)
+#     return new_list % sp.L, Npasses
 
 
 def vel_verlet_step(pos_list, vel_list, sp):
